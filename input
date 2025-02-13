@@ -1,0 +1,19 @@
+#domain boundary in x,y direction
+xlimit 0 0.12
+ylimit 0 0.06
+
+#safety offset distance between particle to aviod over-packing
+offset 0.00001
+
+#period function not  yet
+is_period_function false
+period  0.12
+
+is_symmetry true
+symmetry_axis 0.06
+
+is_piecewise_function false
+
+surface_function_z x**2+0.1*x
+
+particle_diameter 0.0004
