@@ -6,9 +6,11 @@ def setProperties(entry,value,map):
     if entry in map:
         if entry in ["xlimit","ylimit"]:
             map[entry] = [float(v) for v in value]
-        elif entry in ["offset","particle_diameter","symmetry_axis"]:
+        elif entry in ["offset","particle_diameter","symmetry_axis","period"]:
             map[entry] = float(value[0])
-        elif entry in ["is_period_function","is_symmetry","is_piecewise_function"]:
+        elif entry in ["periodNum"]:
+            map[entry] = int(value[0])
+        elif entry in ["is_period_function","is_symmetry"]:
             if value[0].lower() == 'true':
                 map[entry] = True
             elif value[0].lower() == 'false':
@@ -34,9 +36,9 @@ def readInputFile(fileName,config):
                 value = parts[1:]
                 setProperties(key,value,config)
 
-def calculateParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter):
+def calculateParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter,isPeriod,period,periodNum):
 
-    particle_Cords = []
+    particle_Coords = []
 
     for i in range(nParticle_x):
             
@@ -50,13 +52,15 @@ def calculateParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,par
             for n in range(nParticle_z):
 
                 zn=0.5*particle_diameter+n*(offset+particle_diameter)
-                particle_Cords.append(f"({xi:.6f} {ym:.6f} {zn:.6f})")
+                particle_Coords.append(f"({xi:.6f} {ym:.6f} {zn:.6f})")
+                if(isPeriod):
+                    periodShift(particle_Coords,period,periodNum,xi,ym,zn)
 
-    return particle_Cords
+    return particle_Coords
 
-def calculateSymmParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter,symmetryAxis):
+def calculateSymmParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter,symmetryAxis,isPeriod,period,periodNum):
 
-    particle_Cords=[]
+    particle_Coords=[]
 
     xi0=symmetryAxis-particle_diameter-offset
 
@@ -74,8 +78,11 @@ def calculateSymmParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction
             for n in range(nParticle_z):
                     
                 zn=0.5*particle_diameter+n*(offset+particle_diameter)
-                particle_Cords.append(f"({xi:.6f} {ym:.6f} {zn:.6f})")
-                particle_Cords.append(f"({symmetry_x:.6f} {ym:.6f} {zn:.6f})")
+                particle_Coords.append(f"({xi:.6f} {ym:.6f} {zn:.6f})")
+                particle_Coords.append(f"({symmetry_x:.6f} {ym:.6f} {zn:.6f})")
+
+                if(isPeriod):
+                    periodShift(particle_Coords,period,periodNum,xi,ym,zn)
 
     #for coord in particle_Cords:
     
@@ -94,17 +101,14 @@ def calculateSymmParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction
         for n in range(nParticle_zCenter):
                     
             zn=0.5*particle_diameter+n*(offset+particle_diameter)
-            particle_Cords.append(f"({symmetryAxis:.6f} {ym:.6f} {zn:.6f})")
+            particle_Coords.append(f"({symmetryAxis:.6f} {ym:.6f} {zn:.6f})")
     
-    return particle_Cords
+    return particle_Coords
 
-def periodShift(particle_Cords,period):
+def periodShift(particle_Coords,period,periodNum,xCoords,yCoords,zCoords):
 
-    #not available yet
-
-    return particle_Cords
-
-    
+    for i in range(periodNum):
+        particle_Coords.append(f"({xCoords+period*i:.6f} {yCoords:.6f} {zCoords:.6f})")
 
 def generateParticles(config):
 
@@ -116,6 +120,7 @@ def generateParticles(config):
     symmetry_axis=config["symmetry_axis"]
     isPeriod=config["is_period_function"]
     period=config["period"]
+    periodNum=config["periodNum"]
 
     surfaceFunction = parseSurfaceFunction(config["surface_function_z"])
 
@@ -124,19 +129,15 @@ def generateParticles(config):
         nParticle_x = int((symmetry_axis-xLimit[0]-0.5*particle_diameter-offset)/(particle_diameter+offset))
         nParticle_y = int((yLimit[1]-yLimit[0])/(particle_diameter+offset))
 
-        particle_Cords=calculateSymmParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter,symmetry_axis)
+        particle_Coords=calculateSymmParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter,symmetry_axis,isPeriod,period,periodNum)
 
     else:
         nParticle_x = int((xLimit[1]-xLimit[0]-offset)/(particle_diameter+offset))
         nParticle_y = int((yLimit[1]-yLimit[0])/(particle_diameter+offset))
 
-        particle_Cords=calculateParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter)
+        particle_Coords=calculateParticlePosition(nParticle_x,nParticle_y,offset,surfaceFunction,particle_diameter,isPeriod,period,periodNum)
 
-    if isPeriod:
-
-        particle_Cords=periodShift(particle_Cords,period)
-
-    return particle_Cords
+    return particle_Coords
 
 
 def writeOutputFile(particle_Cords):
@@ -168,7 +169,7 @@ FoamFile
 """
         f_output.write(header)
         f_output.write("\n".join(particle_Cords))
-        f_output.write("\n".join(footer))
+        f_output.write(footer)
 
     print("粒子位置文件已成功生成!")
     print("共有"+ f"{len(particle_Cords)}" +"个粒子.")
@@ -181,9 +182,9 @@ def main():
     offset_=0.0
     is_period_function_=False
     period_=0.0
+    periodNum_=0
     is_symmetry_=False
     symmetry_axis_=0.0
-    is_piecewise_function_=False
     surface_function_z_=None
     particleDiameter_=0.0
 
@@ -193,18 +194,18 @@ def main():
         "offset":offset_,
         "is_period_function":is_period_function_,
         "period":period_,
+        "periodNum":periodNum_,
         "is_symmetry":is_symmetry_,
         "symmetry_axis":symmetry_axis_,
-        "is_piecewise_function":is_piecewise_function_,
         "surface_function_z":surface_function_z_,
         "particle_diameter":particleDiameter_
     }
 
     readInputFile("input",config)
 
-    particleCords_= generateParticles(config)
+    particleCoords_= generateParticles(config)
 
-    writeOutputFile(particleCords_)
+    writeOutputFile(particleCoords_)
 
 if __name__ == "__main__":
     main()
